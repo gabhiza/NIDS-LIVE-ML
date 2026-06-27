@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NIDS SOC Dashboard</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #121313;
+      color: #f1f4f2;
+      --panel: #1b1d1c;
+      --panel-soft: #222624;
+      --line: #343a36;
+      --muted: #a7b1aa;
+      --green: #4fd17a;
+      --yellow: #f2c14e;
+      --orange: #ff8a4c;
+      --red: #ff5a68;
+      --cyan: #59c7d8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #121313;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 28px;
+      border-bottom: 1px solid var(--line);
+      background: #181a19;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 750;
+      letter-spacing: 0;
+    }
+
+    main {
+      width: min(1500px, calc(100% - 32px));
+      margin: 18px auto 28px;
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    section {
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .span-3 { grid-column: span 3; }
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-6 { grid-column: span 6; }
+    .span-7 { grid-column: span 7; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #193321;
+      color: var(--green);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .status.attack,
+    .status.error {
+      background: #3a1b20;
+      color: var(--red);
+    }
+
+    .priority-grid,
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .priority,
+    .metric,
+    .action-box {
+      min-height: 92px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel-soft);
+    }
+
+    .priority.critical { border-color: rgba(255, 90, 104, .75); }
+    .priority.high { border-color: rgba(255, 138, 76, .75); }
+    .priority.medium { border-color: rgba(242, 193, 78, .75); }
+    .priority.low { border-color: rgba(79, 209, 122, .75); }
+
+    .priority-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .priority-title,
+    .label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    .priority-count {
+      font-size: 26px;
+      font-weight: 850;
+    }
+
+    .value {
+      display: block;
+      margin-top: 6px;
+      font-size: 20px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .small {
+      color: #d7ded9;
+      font-size: 13px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .muted { color: var(--muted); }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      background: #213629;
+      color: var(--green);
+      white-space: nowrap;
+    }
+
+    .pill.Critical { background: #411d24; color: var(--red); }
+    .pill.High { background: #3d291d; color: var(--orange); }
+    .pill.Medium { background: #3a321d; color: var(--yellow); }
+    .pill.Low { background: #1d3426; color: var(--green); }
+    .pill.disagree { background: #18323a; color: var(--cyan); }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 420px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    table {
+      width: 100%;
+      min-width: 960px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #171918;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .chart {
+      min-height: 280px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel-soft);
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    button,
+    .download {
+      min-height: 38px;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #252a27;
+      color: #f1f4f2;
+      font: inherit;
+      font-weight: 750;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    button:hover,
+    .download:hover {
+      border-color: var(--cyan);
+    }
+
+    pre {
+      margin: 12px 0 0;
+      min-height: 74px;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: #111312;
+      color: #dbe7df;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 1100px) {
+      main,
+      .priority-grid,
+      .metric-grid,
+      .chart-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .span-3,
+      .span-4,
+      .span-5,
+      .span-6,
+      .span-7,
+      .span-8,
+      .span-12 {
+        grid-column: span 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>NIDS SOC Dashboard</h1>
+    <span id="overall-status" class="status">Loading</span>
+  </header>
+
+  <main>
+    <section class="span-12">
+      <h2>Alert Priority Banner</h2>
+      <div id="priority-banner" class="priority-grid"></div>
+    </section>
+
+    <section class="span-4">
+      <h2>Attack Classification</h2>
+      <div class="metric-grid">
+        <div class="metric">
+          <span class="label">Latest Classification</span>
+          <span id="latest-classification" class="value">-</span>
+        </div>
+        <div class="metric">
+          <span class="label">Confidence</span>
+          <span id="latest-confidence" class="value">-</span>
+        </div>
+        <div class="metric">
+          <span class="label">Detection Source</span>
+          <span id="latest-source" class="value">-</span>
+        </div>
+        <div class="metric">
+          <span class="label">Model Output</span>
+          <span id="latest-models" class="value">-</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="span-4">
+      <h2>System Drift Monitor</h2>
+      <div class="metric-grid">
+        <div class="metric">
+          <span class="label">Drift State</span>
+          <span id="drift-state" class="value">-</span>
+        </div>
+        <div class="metric">
+          <span class="label">Anomaly Rate</span>
+          <span id="drift-anomaly" class="value">0</span>
+        </div>
+        <div class="metric">
+          <span class="label">Disagreement Frequency</span>
+          <span id="drift-disagreement" class="value">0</span>
+        </div>
+        <div class="metric">
+          <span class="label">Feature Shift</span>
+          <span id="drift-feature" class="value">0</span>
+        </div>
+      </div>
+      <p id="drift-distribution" class="small"></p>
+    </section>
+
+    <section class="span-4">
+      <h2>Capture And Traffic</h2>
+      <div class="metric-grid">
+        <div class="metric">
+          <span class="label">Capture Status</span>
+          <span id="capture-status" class="value">-</span>
+        </div>
+        <div class="metric">
+          <span class="label">Interface</span>
+          <span id="capture-interface" class="value">-</span>
+        </div>
+        <div class="metric">
+          <span class="label">Packets/Sec</span>
+          <span id="traffic-pps" class="value">0</span>
+        </div>
+        <div class="metric">
+          <span class="label">Active Flows</span>
+          <span id="traffic-flows" class="value">0</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="span-12">
+      <h2>Real-Time Visualization</h2>
+      <div class="chart-grid">
+        <div id="traffic-chart" class="chart"></div>
+        <div id="attack-chart" class="chart"></div>
+        <div id="anomaly-chart" class="chart"></div>
+      </div>
+    </section>
+
+    <section class="span-8">
+      <h2>Live Alert Queue</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Attack Type</th>
+              <th>Severity</th>
+              <th>Source IP</th>
+              <th>Destination IP</th>
+              <th>Model Trigger</th>
+              <th>Confidence</th>
+            </tr>
+          </thead>
+          <tbody id="alert-queue-body">
+            <tr><td colspan="7" class="muted">No active alerts</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="span-4">
+      <h2>Incident Response Actions</h2>
+      <div class="action-box">
+        <div class="small">
+          <strong id="action-source">Source IP: -</strong><br>
+          <span id="action-classification">Classification: -</span><br>
+          <span id="action-severity">Severity: -</span>
+        </div>
+        <div class="button-row" style="margin-top:12px;">
+          <button id="generate-rule">Generate Firewall Rule</button>
+          <button id="export-alert">Export Alert</button>
+          <button id="false-positive">Mark False Positive</button>
+          <button id="investigate-host">Investigate Host</button>
+        </div>
+        <a class="download" href="/api/download-alert-details" style="display:block;margin-top:8px;">Download Alert Details</a>
+        <div id="pcap-downloads" style="margin-top:8px;"></div>
+        <pre id="action-output"></pre>
+      </div>
+    </section>
+
+    <section class="span-12">
+      <h2>Model Disagreement Detection</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Anomaly Score</th>
+              <th>RF Prediction</th>
+              <th>IF Prediction</th>
+              <th>Flow Summary</th>
+            </tr>
+          </thead>
+          <tbody id="disagreement-body">
+            <tr><td colspan="5" class="muted">No model disagreements detected</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let latestAlert = null;
+
+    const setText = (id, value) => {
+      document.getElementById(id).textContent = value ?? "-";
+    };
+
+    const escapeHtml = (value) => String(value ?? "-")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+    const severityPill = (severity, status) => {
+      const cls = status === "MODEL DISAGREEMENT DETECTED" ? "disagree" : escapeHtml(severity || "Low");
+      return `<span class="pill ${cls}">${escapeHtml(severity || "Low")}</span>`;
+    };
+
+    const priorityClass = (severity) => severity.toLowerCase();
+
+    const renderPriorityBanner = (priority) => {
+      const banner = document.getElementById("priority-banner");
+      const severities = ["Critical", "High", "Medium", "Low"];
+      banner.innerHTML = severities.map((severity) => {
+        const bucket = priority?.[severity] || { count: 0, items: [] };
+        const item = bucket.items?.[0];
+        const detail = item
+          ? `${escapeHtml(item.attack_type)} | ${escapeHtml(item.src_ip)} -> ${escapeHtml(item.dst_ip)}<br>${escapeHtml(item.timestamp)} | ${escapeHtml(item.confidence_score)}`
+          : "No alerts";
+        return `
+          <div class="priority ${priorityClass(severity)}">
+            <div class="priority-head">
+              <span class="priority-title">${severity} Alerts</span>
+              <span class="priority-count">${bucket.count || 0}</span>
+            </div>
+            <div class="small">${detail}</div>
+          </div>
+        `;
+      }).join("");
+    };
+
+    const renderAlertQueue = (rows) => {
+      const body = document.getElementById("alert-queue-body");
+      body.innerHTML = "";
+      if (!rows || rows.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" class="muted">No active alerts</td></tr>';
+        return;
+      }
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${escapeHtml(row.timestamp)}</td>
+          <td>${escapeHtml(row.attack_type)}</td>
+          <td>${severityPill(row.severity, row.status)}</td>
+          <td>${escapeHtml(row.src_ip)}</td>
+          <td>${escapeHtml(row.dst_ip)}</td>
+          <td>${escapeHtml(row.model_trigger)}</td>
+          <td>${escapeHtml(row.confidence_score)}</td>
+        `;
+        body.appendChild(tr);
+      });
+    };
+
+    const renderDisagreements = (rows) => {
+      const body = document.getElementById("disagreement-body");
+      body.innerHTML = "";
+      if (!rows || rows.length === 0) {
+        body.innerHTML = '<tr><td colspan="5" class="muted">No model disagreements detected</td></tr>';
+        return;
+      }
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${escapeHtml(row.timestamp)}</td>
+          <td>${escapeHtml(row.anomaly_score)}</td>
+          <td>${escapeHtml(row.rf_prediction)}</td>
+          <td>${escapeHtml(row.iso_prediction)}</td>
+          <td>${escapeHtml(row.flow_summary)}</td>
+        `;
+        body.appendChild(tr);
+      });
+    };
+
+    const plotLayout = (title) => ({
+      title: { text: title, font: { color: "#f1f4f2", size: 14 } },
+      margin: { l: 46, r: 18, t: 42, b: 38 },
+      paper_bgcolor: "#222624",
+      plot_bgcolor: "#222624",
+      font: { color: "#d7ded9" },
+      xaxis: { gridcolor: "#343a36" },
+      yaxis: { gridcolor: "#343a36" },
+      showlegend: true,
+      legend: { orientation: "h" }
+    });
+
+    const renderCharts = (charts) => {
+      if (!window.Plotly) return;
+      const x = charts?.timestamps || [];
+      Plotly.react("traffic-chart", [
+        { x, y: charts?.packets_per_second || [], type: "scatter", mode: "lines", name: "packets/sec", line: { color: "#59c7d8" } },
+        { x, y: charts?.flows_per_second || [], type: "scatter", mode: "lines", name: "flows/sec", line: { color: "#4fd17a" } }
+      ], plotLayout("Live Traffic Trend"), { displayModeBar: false, responsive: true });
+      Plotly.react("attack-chart", [
+        { x, y: charts?.attacks || [], type: "bar", name: "attacks", marker: { color: "#ff8a4c" } }
+      ], plotLayout("Attack Frequency"), { displayModeBar: false, responsive: true });
+      Plotly.react("anomaly-chart", [
+        { x, y: charts?.anomaly_scores || [], type: "scatter", mode: "lines+markers", name: "anomaly score", line: { color: "#ff5a68" } }
+      ], plotLayout("Isolation Forest Anomaly Trend"), { displayModeBar: false, responsive: true });
+    };
+
+    const renderPcaps = (pcap) => {
+      const target = document.getElementById("pcap-downloads");
+      if (!pcap?.files?.length) {
+        target.innerHTML = '<div class="small muted">PCAP download placeholder active</div>';
+        return;
+      }
+      target.innerHTML = pcap.files.map((file) =>
+        `<a class="download" style="display:block;margin-top:8px;" href="/api/pcaps/${encodeURIComponent(file.name)}">Download PCAP</a>`
+      ).join("");
+    };
+
+    const renderState = (data) => {
+      if (data.error) {
+        const status = document.getElementById("overall-status");
+        status.textContent = "Backend error";
+        status.className = "status error";
+        setText("action-output", data.error);
+        return;
+      }
+
+      latestAlert = data.latest_alert || null;
+      const attack = data.status === "Attack detected";
+      const status = document.getElementById("overall-status");
+      status.textContent = data.status;
+      status.className = `status ${attack ? "attack" : ""}`;
+
+      const classification = data.latest_classification || {};
+      const drift = data.drift_monitor || {};
+      const packet = data.packet_sniffer || {};
+      const traffic = data.traffic || {};
+      const alert = latestAlert || {};
+
+      renderPriorityBanner(data.alert_priority);
+      renderAlertQueue(data.alert_queue || []);
+      renderDisagreements(data.model_disagreements || []);
+      renderCharts(data.charts || {});
+      renderPcaps(data.pcap_support || {});
+
+      setText("latest-classification", classification.attack_type);
+      setText("latest-confidence", classification.confidence);
+      setText("latest-source", classification.detection_source);
+      setText("latest-models", `RF ${classification.rf_prediction || "-"} / IF ${classification.iso_prediction || "-"}`);
+      setText("drift-state", `${drift.status || "GREEN"} - ${drift.label || "Stable"}`);
+      setText("drift-anomaly", drift.anomaly_rate ?? 0);
+      setText("drift-disagreement", drift.model_disagreement_frequency ?? 0);
+      setText("drift-feature", drift.feature_distribution_shift ?? 0);
+      setText("drift-distribution", Object.entries(drift.prediction_distribution || {}).map(([key, value]) => `${key}: ${value}`).join(" | "));
+      setText("capture-status", `${packet.status || "-"}${packet.error ? ": " + packet.error : ""}`);
+      setText("capture-interface", packet.interface);
+      setText("traffic-pps", traffic.packets_per_second ?? 0);
+      setText("traffic-flows", traffic.number_of_flows ?? 0);
+      setText("action-source", `Source IP: ${alert.src_ip || "-"}`);
+      setText("action-classification", `Classification: ${alert.attack_type || "-"}`);
+      setText("action-severity", `Severity: ${alert.severity || "-"}`);
+    };
+
+    document.getElementById("generate-rule").addEventListener("click", () => {
+      const rule = latestAlert?.firewall_rule || "";
+      setText("action-output", rule || "No malicious source IP selected.");
+    });
+
+    document.getElementById("export-alert").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(latestAlert || {}, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "alert_export.json";
+      link.click();
+      URL.revokeObjectURL(url);
+      setText("action-output", "Alert exported.");
+    });
+
+    document.getElementById("false-positive").addEventListener("click", () => {
+      setText("action-output", latestAlert ? `Marked for analyst review: ${latestAlert.flow_key}` : "No alert selected.");
+    });
+
+    document.getElementById("investigate-host").addEventListener("click", () => {
+      const src = latestAlert?.src_ip || "-";
+      setText("action-output", `Host investigation target: ${src}`);
+    });
+
+    const connectEvents = () => {
+      const events = new EventSource("/api/events");
+      events.onmessage = (event) => renderState(JSON.parse(event.data));
+      events.onerror = () => {
+        events.close();
+        setTimeout(connectEvents, 3000);
+      };
+    };
+
+    connectEvents();
+  </script>
+</body>
+</html>
