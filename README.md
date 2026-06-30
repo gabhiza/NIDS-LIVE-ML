@@ -1,4 +1,4 @@
-# 🛡️ Network Intrusion Detection System (NIDS Live ML)
+# 🛡️ Network Intrusion Detection System (NIDS) using Machine Learning
 
 ## Project Overview
 
